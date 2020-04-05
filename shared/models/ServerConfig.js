@@ -1,0 +1,1 @@
+// this model will represent a the configuration for a server

@@ -5,11 +5,8 @@ Client Secret: XYxxN8lSgWTdHZho_XUxwooaRcjMp7C7
 Token: Njg2OTU3MzA4Mjg2MzM3MDUx.Xn0xrg.5Kyn524JMrZLoJOERNQ3iJiUU2g
 
 */
-global.bot_config = {
-    env: process.env.NODE_ENV || 'development',
-    token: process.env.TOKEN || 'Njg2OTU3MzA4Mjg2MzM3MDUx.Xn0xrg.5Kyn524JMrZLoJOERNQ3iJiUU2g',
-    log_level: process.env.LOG_LEVEL || 'debug'
-};
+const config = require('../shared/config');
+config.token = process.env.TOKEN || 'Njg2OTU3MzA4Mjg2MzM3MDUx.Xn0xrg.5Kyn524JMrZLoJOERNQ3iJiUU2g';
 
 /* imports */
 const Discord = require('discord.js');
@@ -17,20 +14,27 @@ const {createLogger,wrapConsole} = require('@r3wt/log');
 const GracefulShutdown = require('./services/GracefulShutdown');
 
 /* initialization logic */
-
+global.utils = require('./lib/utils');
 //initialize our logger
-const log = createLogger({log_level:bot_config.log_level});
+const log = createLogger({log_level:config.log_level});
 wrapConsole(log);// this wraps global console.log, so any messages you log with console via log, warn, error, or info will be caught and handled by the logging library.
 
 // initialize our graceful shutdown service
 global.shutdown = new GracefulShutdown;
 
 // initialize the discord client
-const client = new Discord.Client();
+const client = new Discord.Client({shards:'auto'});
+
+const prefix = '!';
 
 client.on("ready", () => {
-    console.log(`Ready to serve on ${client.guilds.size} servers, for ${client.users.size} users.`);
+    console.log('AesirBot is online');
+    console.log('connected to %d guilds',client.guilds.size);
 });
+
+const parser  = require('discord-command-parser');
+
+const MusicBot = require('./services/MusicBot');
 
 client.on('message', message => {
 
@@ -38,12 +42,45 @@ client.on('message', message => {
         return;
     }
 
+    const guild = message.guild.id;
 
+    const parsed = parser.parse(message, prefix);
 
+    if (!parsed.success) return;
+
+    if(parsed.command==='m'){
+        //command for music bot
+        const voiceChannel = message.member.voice.channel;
+
+        if (!voiceChannel){
+            return message.channel.send("You need to be in a voice channel to play music!");    
+        }
+
+        const permissions = voiceChannel.permissionsFor(message.client.user);
+        if (!permissions.has("CONNECT") || !permissions.has("SPEAK")) {
+            return message.channel.send("I need the permissions to join and speak in your voice channel!");
+        }
+
+        if(!parsed.arguments.length) {
+            return message.channel.send('you need to provide arguments. type `!m commands` or `!m c` for a list of commands');
+        }
+
+        switch(parsed.arguments[0]) {
+            case `c`:
+            case `commands`:
+                return message.channel.send('not implemented');
+            break;
+            case `p`:
+            case `play`:
+                MusicBot.exec(message,guild,parsed.arguments.slice(1));
+            break;
+        }
+
+    }
 
 });
 
-client.login(bot_config.token);
+client.login(config.token);
 
 //setup our graceful shutdown handlers
 process.on('SIGINT',signal=>{
@@ -58,7 +95,9 @@ process.on('SIGINT',signal=>{
 
 process.on('uncaughtException',err=>{
     console.log('uncaughtException: '+err.message); 
-    shutdown.runHooks().then(()=>{
-        process.exit(1);
+        setTimeout(()=>{
+            shutdown.runHooks().then(()=>{
+            process.exit(1);
+        });
     });
 })
